@@ -51,6 +51,10 @@
 * **Scalable Pretraining Strategy:** Magma is designed to be **learned scalably from unlabeled videos** in the wild in addition to the existing agentic data, making it strong generalization ability and suitable for real-world applications!
 
 ## :fire: News
+* **[2025.04.06]** Open X-Embodiment pretraining data with visual traces can be downloaded from [Magma-OXE-ToM](https://huggingface.co/datasets/MagmaAI/Magma-OXE-ToM).
+* **[2025.03.16]** We released the demo code for generating SoM and ToM for instructional videos (i.e., Alg. 2 in our paper) in [SoM/ToM Generation](#som-and-tom-generation).
+* **[2025.03.09]** 🔥 We released Magma training code, and an exampler for training Magma-8B on Magma-820K dataset. Check out the [Model Training](#model-training)
+* **[2025.03.06]** We released a new demo for showing robot planning capabilities. Run `python agents/robot_traj/app.py` to start the demo!
 * **[2025.02.28]** We released two demos, [Magma-UI](https://huggingface.co/spaces/microsoft/Magma-UI) and [Magma-Gaming](https://huggingface.co/spaces/microsoft/Magma-Gaming) on Hugging Face. Check out our model's action grounding and planning capabilities!
 * **[2025.02.26]** ⭐ Exciting News! Magma got accepted by CVPR 2025!
 * **[2025.02.25]** 🎉 Big News! We are releasing the Magma model on [Hugging Face](https://huggingface.co/microsoft/Magma-8B) and [Azure AI Foundry](https://ai.azure.com/explore/models/microsoft-magma-8b/version/1/registry/HuggingFace?tid=72f988bf-86f1-41af-91ab-2d7cd011db47)!
@@ -64,23 +68,32 @@ We will be releasing all the following contents:
 - [x] Model inference code
 - [x] Add UI and Gaming agent Demos
 - [x] Model checkpoint
-- [ ] Training code
-- [ ] Pretraining data
+- [x] Training code
+- [x] Open-XE pretraining data with traces
+- [ ] Video pretraining data with traces
 
 
 ## :clipboard: Outline
 - [What is Magma?](#what-is-magma)
 - [How we pretrain Magma?](#how-we-pretrain-magma)
 - [Installation](#installation)
+- [Data Preprocessing](#data-preprocessing)
+  - [SoM and ToM Generation](#som-and-tom-generation)
+- [Model Training](#model-training)
+  - [Pretraining on Open-X without SoM/ToM](#pretraining-on-open-x-without-somtom)
+  - [Finetuning on Magma-820K](#finetuning-on-magma-820k)
 - [Model Usage](#model-usage)
-      - [Inference with Huggingface Transformers](#inference-with-huggingface-transformers)
-      - [Inference with local code](#inference-with-local-code-from-this-repo)
-      - [Evaluation with lmms-eval](#evaluation-with-lmms-eval)
-      - [Multi-images or Video](#multi-images-or-video)
-      - [Agent Demos](#agent-demos)
+    - [Inference with Huggingface Transformers](#inference-with-huggingface-transformers)
+    - [Inference with local code from this repo](#inference-with-local-code-from-this-repo)
+    - [Evaluation with lmms-eval](#evaluation-with-lmms-eval)
+    - [Evaluation with SimplerEnv](#evaluation-with-simplerenv)
+    - [Multi-images or Video](#multi-images-or-video)
+    - [Agent Demos](#agent-demos)
+        - [UI Agent](#ui-agent)
+        - [Gaming Agent](#gaming-agent)
+        - [Robot Visual Planning](#robot-visual-planning)
 - [Citation](#citation)
 - [Acknowledgements](#acknowledgements)
-- [License](#license)
 
 ## What is Magma?
 
@@ -88,7 +101,7 @@ We will be releasing all the following contents:
 <img src="assets/images/magma_intro_fig.png?raw=true" width="50%">
 </div>
 
-**Magma is a foundation model for multimodal AI agents**. As the bedrock for multimodal agentic models, it should possess strong capabilities to perceive the multimodal groundingly world AND takes goal-driven actions precisely (see above figure). With this in mind, we are striving for the following goals:
+**Magma is a foundation model for multimodal AI agents**. As the bedrock for multimodal agentic models, it should possess strong capabilities to perceive the multimodal world AND takes goal-driven actions precisely (see above figure). With this in mind, we are striving for the following goals:
 
 * **Verbal and spatial-temporal intelligence:** Magma is supposed to have both strong verbal and spatial-temporal intelligence to understand images and videos, ground its actions on the observations, and further translate the external goal into action plan and executions.
 * **Digital and physical world:** Magma should not be limited to either the digital world (e.g., web navigation) or the physical world (e.g., robotics manipulation), but rather be able to work across both worlds, just like humans ourselves.
@@ -136,6 +149,42 @@ pip install -e ".[train]"
 pip install -e ".[agent]"
 ```
 
+5. Other probably needed packages:
+
+* Co-tracker
+```sh
+# Install co-tracker
+git clone https://github.com/facebookresearch/co-tracker
+cd co-tracker
+pip install -e .
+pip install imageio[ffmpeg]
+cd ../
+```
+
+* Kmeans
+```sh
+# Install kmeans_pytorch, note: install with pip will leads to error
+git clone https://github.com/subhadarship/kmeans_pytorch
+cd kmeans_pytorch
+pip install -e .
+cd ../
+```
+
+* Misc
+```sh
+# Install others packages
+pip install ipython
+pip install faiss-cpu
+pip install decord
+```
+
+⚠️ Please make sure you have installed the transformers with correct version (>=4.49.0). If you see some abnormal behavior, please check the version of transformers, and probably see below for the customized transformers.
+
+<details>
+<summary>Click to expand</summary>
+
+### Customized Transformers
+
 ⚠️ One important thing to note is that our model uses [ConvNext](https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/convnext.py) as the backbone, which contains a layer scaler parameter [gamma](https://github.com/huggingface/pytorch-image-models/blob/e44f14d7d2f557b9f3add82ee4f1ed2beefbb30d/timm/models/convnext.py#L144). This leads to a bug of Transformers library as it automatically replace the 'gamma' with 'weight' when loading the model. To fix this, we need to modify the 'transformers/models/auto/modeling_auto.py' file as follows:
 
 ```python 
@@ -151,6 +200,71 @@ pip install git+https://github.com/jwyang/transformers.git@dev/jwyang-v4.44.1
 or the newest version:
 ```bash
 pip install git+https://github.com/jwyang/transformers.git@dev/jwyang-v4.48.2
+```
+
+</details>
+
+## Data Preprocessing
+
+### SoM and ToM Generation
+
+As shown in Table 1 of our paper, we apply SoM and ToM on both robotics data and instructional videos. To ensure reproducibility, we provide the code to generate SoM and ToM for instructional videos. The code is located in `tools/som_tom/demo.py`. You can run the following command to generate SoM and ToM for the robotics data:
+
+```bash
+python tools/som_tom/demo.py
+```
+
+And then you can find two videos in the `tools/som_tom/videos` folder. The original trace extracted from CoTracker is shown in `orig_trace.mp4`, and the SoM-ToM video is named `som_tom.mp4`.
+
+## Model Training
+
+We provide the instructions to pretrain LLama-3-8B-Instruct on Open-X-Embodiment and finetune Magma-8B on different downstream tasks.
+
+### Pretraining on Open-X without SoM/ToM
+
+* Data Preparation
+
+Download Open-X-Embodiment from the official site. Then edit the data config file [openx.yaml](data_configs/openx.yaml) accordingly. The data config file should look like this:
+
+```yaml
+# a list of all the data paths
+DATA_PATH: 
+  - "/path/to/open-x"
+IMAGE_FOLDER:
+  - "siglip-224px+mx-oxe-magic-soup"    
+LANGUAGE_PATH:
+  - ""
+```
+
+* Pretrain on OpenX
+
+Once set up the dataset and config, you can run the following command to finetune the model:
+
+```bash
+sh scripts/pretrain/pretrain_openx.sh
+```
+* Benefit: We spent tremendous effort to decouple the Open-X dataloader from OpenVLA and make it compatible with other datasets used in our experiments*
+
+### Finetuning on Magma-820K
+
+* Data Preparation
+
+Download annotation file from [MagmaAI/Magma-820K](https://huggingface.co/datasets/MagmaAI/Magma-820K). Please prepare the image data according to the dataset list in the dataset page. Once finished, please edit [magma_820k.yaml](data_configs/magma_820k.yaml) file accordingly.
+
+```yaml
+# a list of all the data paths
+DATA_PATH: 
+  - "/path/to/magma_820k.json"
+IMAGE_FOLDER:
+  - "/root/to/magma_820k/images"
+```
+
+* Finetune from Magma-8B
+
+Once set up the dataset and config, you can run the following command to finetune the model:
+
+```bash
+sh scripts/finetune/finetune_magma_820k.sh
 ```
 
 ## Model Usage
@@ -224,26 +338,31 @@ model.to("cuda")
 
 ### Evaluation with lmms-eval
 
-To faciliate the quantitative evaluation of our model, we also provide a model class for [lmms-eval](https://github.com/EvolvingLMMs-Lab/lmms-eval). Please refer to [lmms-eval-magma](./tools/lmms-eval-magma) for the code.
+Please refer to [lmms-eval-instruction](tools/lmms-eval-magma) for the detailed instructions to run the evaluation with lmms-eval toolkit.
 
-After installing lmms-eval, copy 'tools/lmms_eval_magma/magma.py' to 'lmms-eval/lmms-eval/models' folder.
+Once everything is ready, you can run the following code to evaluate our model from the root folder.
 
-Remember to register our model by modifying the 'lmms-eval/lmms_eval/models/__init__.py' file as follows:
-
-```python
-AVAILABLE_MODELS = {
-    # many previous registered models
-    "magma": Magma,
-}
+```bash
+sh scripts/evaluation/lmms-eval/lmms_eval_magma.sh
 ```
+
+You can evaluate other benchmarks by modifying the variable, eval_tasks. The list of `eval_tasks` can be found after running below code.
+```
+# lmms-eval --tasks {list_groups,list_subtasks,list_tags,list}
+lmms-eval --tasks list_groups
+```
+
+### Evaluation with SimplerEnv
+
+Please refer to [SimplerEnv-instruction](tools/simplerenv-magma) for the detailed instructions to run the evaluation with SimplerEnv toolkit.
 
 Once everything is ready, you can run the following code to evaluate our model.
 
 ```bash
-sh scripts/lmms_eval_magma.sh
+sh scripts/evaluation/simplerenv/bridge.sh
 ```
 
-### Multi-images or Video
+### Multi-images or Video Support
 
 Handle multiple images is extremely simple for our model. You just simply duplicate the placeholder in your text prompt, and correspondingly add all images into the list. A dummy example is as follows:
 
@@ -278,6 +397,61 @@ But also ask free question on the fly! Simply add a prefix "Q:" at the beginning
 ```bash
 Q: What is the title of the post?
 ```
+
+#### Gaming Agent
+
+We also built a gaming agent demo. You can run the following command to start the demo:
+
+```bash
+python agents/gaming_agent/app.py
+```
+
+Once the demo is run, you can see a robot proactively collecting the green blocks. 
+
+<!-- Below are the comparison between Magma and other counterparts VLMs:
+
+<div align="center">
+<video width="48%" controls autoplay>
+    <source src="https://microsoft.github.io/Magma/static/videos/magma_vs_llava.mp4" type="video/mp4">
+    <p>Magma v.s. LLaVA-OneVision.</p>
+</video>
+<video width="48%" controls autoplay>
+    <source src="https://microsoft.github.io/Magma/static/videos/magma_vs_qwen.mp4" type="video/mp4">
+    <p>Magma v.s. Qwen-2.0.</p>
+</video>
+</div> -->
+
+#### Robot Visual Planning
+
+We also built a robot visual planning demo. You can run the following command to start the demo:
+
+```bash
+python agents/robot_traj/app.py
+```
+
+For this demo, you may encounter an error as discussed in this [issue](https://github.com/microsoft/Magma/issues/43), a quick fix is running the following command:
+
+```sh
+pip install imageio[ffmpeg]
+```
+
+If it still does not work, please install the older version of transformers:
+```sh
+pip install git+https://github.com/jwyang/transformers.git@dev/jwyang-v4.44.1
+```
+
+<!-- Some example outputs:
+
+<div align="center">
+<video width="48%" controls autoplay>
+    <source src="assets/videos/robot_pick_up_chip_bag.mp4" type="video/mp4">
+    <p>Task: Pick up chip bag.</p>
+</video>
+<video width="48%" controls autoplay>
+    <source src="assets/videos/robot_push_chip_bag_to_left_edge_of_table.mp4" type="video/mp4">
+    <p>Task: Push chip bag to left edge of the table.</p>
+</video>
+</div> -->
 
 ## User Guidance
 
