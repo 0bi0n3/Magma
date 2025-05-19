@@ -41,7 +41,6 @@ dependencies = [
     "tensorflow_datasets==4.9.3",
     "tensorflow_graphics==2021.12.3",    
     "draccus",    
-    "pyav",
     "numba", 
     "dlimp @ git+https://github.com/moojink/dlimp_openvla",
     "loguru", 
@@ -84,6 +83,12 @@ agent = [
     "paddlepaddle==2.6.2",
     "supervision==0.18.0",
     "ultralytics==8.3.78", 
+]
+server = [
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "pillow"
 ]
 
 [tool.setuptools.packages.find]

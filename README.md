@@ -51,6 +51,8 @@
 * **Scalable Pretraining Strategy:** Magma is designed to be **learned scalably from unlabeled videos** in the wild in addition to the existing agentic data, making it strong generalization ability and suitable for real-world applications!
 
 ## :fire: News
+* **[2025.04.29]** [Mind2Web](https://huggingface.co/datasets/MagmaAI/Magma-Mind2Web-SoM) and [AITW](https://huggingface.co/datasets/MagmaAI/Magma-AITW-SoM) with SoM prompting annotations are released on hugging face! We used them for our Magma downstream finetuning and reported the results in our table.
+* **[2025.04.12]** 🔥We released the pretraining videos with visual traces on hugging face [Magma-Video-ToM](https://huggingface.co/datasets/MagmaAI/Magma-Video-ToM).
 * **[2025.04.06]** Open X-Embodiment pretraining data with visual traces can be downloaded from [Magma-OXE-ToM](https://huggingface.co/datasets/MagmaAI/Magma-OXE-ToM).
 * **[2025.03.16]** We released the demo code for generating SoM and ToM for instructional videos (i.e., Alg. 2 in our paper) in [SoM/ToM Generation](#som-and-tom-generation).
 * **[2025.03.09]** 🔥 We released Magma training code, and an exampler for training Magma-8B on Magma-820K dataset. Check out the [Model Training](#model-training)
@@ -70,8 +72,10 @@ We will be releasing all the following contents:
 - [x] Model checkpoint
 - [x] Training code
 - [x] Open-XE pretraining data with traces
-- [ ] Video pretraining data with traces
-
+- [x] Video pretraining data with traces
+- [ ] SeeClick and Vision2UI pretraining data with SoM
+- [ ] UI/Libero finetuning script
+- [ ] Video finetune script
 
 ## :clipboard: Outline
 - [What is Magma?](#what-is-magma)
@@ -83,15 +87,19 @@ We will be releasing all the following contents:
   - [Pretraining on Open-X without SoM/ToM](#pretraining-on-open-x-without-somtom)
   - [Finetuning on Magma-820K](#finetuning-on-magma-820k)
 - [Model Usage](#model-usage)
+  - [Inference](#inference)
     - [Inference with Huggingface Transformers](#inference-with-huggingface-transformers)
     - [Inference with local code from this repo](#inference-with-local-code-from-this-repo)
-    - [Evaluation with lmms-eval](#evaluation-with-lmms-eval)
-    - [Evaluation with SimplerEnv](#evaluation-with-simplerenv)
-    - [Multi-images or Video](#multi-images-or-video)
-    - [Agent Demos](#agent-demos)
-        - [UI Agent](#ui-agent)
-        - [Gaming Agent](#gaming-agent)
-        - [Robot Visual Planning](#robot-visual-planning)
+    - [Inference with bitsandbytes](#inference-with-bitsandbytes)
+    - [Benchmarking](#benchmarking)
+  - [Evaluation with lmms-eval](#evaluation-with-lmms-eval)
+  - [Evaluation with SimplerEnv](#evaluation-with-simplerenv)
+  - [Multi-images or Video](#multi-images-or-video)
+  - [API Server](#api-server) 
+  - [Agent Demos](#agent-demos)
+      - [UI Agent](#ui-agent)
+      - [Gaming Agent](#gaming-agent)
+      - [Robot Visual Planning](#robot-visual-planning)
 - [Citation](#citation)
 - [Acknowledgements](#acknowledgements)
 
@@ -269,7 +277,9 @@ sh scripts/finetune/finetune_magma_820k.sh
 
 ## Model Usage
 
-### Inference with Huggingface Transformers
+### Inference
+
+#### Inference with Huggingface Transformers
 
 We have uploaded the model to Huggingface Hub. You can easily load the model and processor with the following code.
 
@@ -318,7 +328,7 @@ print(response)
 ```
 </details>
 
-### Inference with local code from this repo
+#### Inference with local Transformers code from this repo
 
 If you want to debug our model, we also provide a local code for inference. You can run the following code to load the model.
 <details>
@@ -335,6 +345,78 @@ model.to("cuda")
 ```
 </details>
 
+#### Inference with bitsandbytes
+
+We also provide a sample code to inference with bitsandbytes. You can run the following code to load the model.
+
+<details>
+<summary>Click to expand</summary>
+
+```python
+from PIL import Image
+import torch
+from transformers import AutoModelForCausalLM
+from transformers import AutoProcessor 
+from transformers import BitsAndBytesConfig
+
+# Define quantization configuration
+quantization_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_compute_dtype=torch.float16,
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_quant_type="nf4"
+)
+
+# Load model with quantization config
+model = AutoModelForCausalLM.from_pretrained(
+    "microsoft/Magma-8B", 
+    trust_remote_code=True,
+    device_map={"": 0},  # force everything onto GPU 0
+    quantization_config=quantization_config
+)
+processor = AutoProcessor.from_pretrained("microsoft/Magma-8B", trust_remote_code=True)
+
+# Inference
+image = Image.open("assets/images/magma_logo.jpg").convert("RGB")
+
+convs = [
+    {"role": "system", "content": "You are agent that can see, talk and act."},            
+    {"role": "user", "content": "<image_start><image><image_end>\nWhat is the letter on the robot?"},
+]
+prompt = processor.tokenizer.apply_chat_template(convs, tokenize=False, add_generation_prompt=True)
+inputs = processor(images=[image], texts=prompt, return_tensors="pt")
+inputs['pixel_values'] = inputs['pixel_values'].unsqueeze(0)
+inputs['image_sizes'] = inputs['image_sizes'].unsqueeze(0)
+
+# Convert inputs to the correct device and data type
+inputs = {k: v.to(device=model.device, dtype=torch.float16 if v.dtype == torch.float32 else v.dtype) 
+          for k, v in inputs.items()}
+
+generation_args = { 
+    "max_new_tokens": 500, 
+    "temperature": 0.0, 
+    "do_sample": False, 
+    "use_cache": True,
+    "num_beams": 1,
+} 
+
+with torch.inference_mode():
+    generate_ids = model.generate(**inputs, **generation_args)
+
+generate_ids = generate_ids[:, inputs["input_ids"].shape[-1] :]
+response = processor.decode(generate_ids[0], skip_special_tokens=True).strip()
+print(response)
+```
+</details>
+
+#### Benchmarking
+
+We benchmark the inference time and memory usage of our model with and without bitsandbytes.
+
+| Model | Inference Time | Peak Memory Usage |
+|-------|----------------|--------------|
+| Magma-8B (bfloat16) | 1.1s | 17GB |
+| Magma-8B (4-bit) | 1.1s | 7GB |
 
 ### Evaluation with lmms-eval
 
@@ -375,6 +457,43 @@ prompt = processor.tokenizer.apply_chat_template(convs, tokenize=False, add_gene
 inputs = processor(images=[image1,image2,image3], texts=prompt, return_tensors="pt")
 ```
 Our model will handle the visual token filling for you!
+
+### API Server
+
+We provide a FastAPI server for deploying Magma as a REST API service, which enables:
+- Vision and language processing via REST endpoints
+- Action prediction for robotics applications
+- Support for both base64-encoded images and file uploads
+
+The server can be deployed in three ways:
+1. **Run directly**: Simplest option for development
+2. **Docker container**: Recommended for production
+3. **Native system service**: For system integration
+
+#### Quick Start
+
+```bash
+cd server
+./magma-server.sh run
+```
+
+This will set up a conda environment, install dependencies, and start the server on port 8080.
+
+#### Docker Deployment
+
+```bash
+cd server
+./magma-server.sh docker up
+```
+
+#### API Endpoints
+
+The API exposes the following endpoints:
+- `GET /health` - Check if the server is running and model is loaded
+- `POST /predict` - Predict using base64-encoded image
+- `POST /predict_from_file` - Predict using uploaded image file
+
+For more details, see the [Server README](server/README.md).
 
 ### Agent Demos
 
