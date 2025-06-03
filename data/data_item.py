@@ -62,19 +62,27 @@ class DataItem:
             if self._get_dataset_tag(data_path) == "openx":
                 list_data_dict = OpenXDataItem()(data_path, image_folder, processor=processor, conversation_lib=conversation_lib, local_run=self.local_run)
             elif self._get_dataset_tag(data_path) == "pixelprose":
-                # Load the dataset
+                ## Load the dataset
                 list_data_dict = load_dataset(
                     data_path, 
                     cache_dir=image_folder
                 )
+
+
             else:
                 data_folder = os.path.dirname(data_path)
                 # get file name from data_path
                 data_files = data_path.split('/')[-1].split('+')
-                list_data_dict = []
-                for file in data_files:
-                    json_path = os.path.join(data_folder, file + '.json')      
-                    list_data_dict.extend(json.load(open(json_path, "r")))                
+                # list_data_dict = []
+                # for file in data_files:
+                #     json_path = os.path.join(data_folder, file + '.json')      
+                #     list_data_dict.extend(json.load(open(json_path, "r")))     
+                print(f"****************************** {image_folder} ********************************")
+                list_data_dict = load_dataset(
+                    'MagmaAI/Magma-Mind2Web-SoM', 
+                    cache_dir="/mnt/welles/scratch/datasets/Magma-Mind2Web-SoM/new"
+                )
+        import pdb; pdb.set_trace()      
         return list_data_dict
     
     def __call__(self, data_path, processor=None, conversation_lib=None, is_eval=False):
@@ -113,6 +121,7 @@ class DataItem:
                         items_temp = items_dict_temp         
                     else:
                         # add image_foler to each item
+                        
                         for item in items_temp:
                             item['image_folder'] = image_folder
                         # add dataset tag to each item
