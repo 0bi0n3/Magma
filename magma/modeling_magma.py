@@ -486,7 +486,7 @@ class MagmaForCausalLM(MagmaPreTrainedModel):
             # 1. Create a mask to know where special image tokens are
             special_image_token_mask = input_ids == image_token_index
             # special_image_token_mask: [bsz, seqlen]
-            num_special_image_tokens = torch.sum(special_image_token_mask, dim=-1)
+            num_special_image_tokens = torch.sum(special_image_token_mask.float(), dim=-1)
             # num_special_image_tokens: [bsz]
             # Reserve for padding of num_images
             total_num_special_image_tokens = torch.sum(special_image_token_mask)
