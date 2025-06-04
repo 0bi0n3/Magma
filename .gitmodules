@@ -1,0 +1,6 @@
+[submodule "co-tracker"]
+	path = co-tracker
+	url = https://github.com/microsoft/co-tracker.git
+[submodule "kmeans_pytorch"]
+	path = kmeans_pytorch
+	url = https://github.com/microsoft/kmeans_pytorch.git
