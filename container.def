@@ -24,7 +24,6 @@ From: nvidia/cuda:12.1.1-devel-ubuntu22.04
     python3 -m pip install --no-cache-dir \
         torch==2.1.2 \
         torchvision==0.16.2 \
-        torchmetrics==1.7.1 \
         --index-url https://download.pytorch.org/whl/cu121
         
     python3 -m pip install --no-cache-dir -r /tmp/full_requirements.txt
@@ -34,4 +33,3 @@ From: nvidia/cuda:12.1.1-devel-ubuntu22.04
  
 %runscript
     exec bash
-    
