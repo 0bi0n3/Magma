@@ -6,6 +6,11 @@ __pycache__
 # C extensions
 *.so
 
+# Sif, model weights
+*.sif
+*.simg
+Magma-8B/
+
 # Distribution / packaging
 .Python
 build/
