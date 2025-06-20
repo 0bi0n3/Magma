@@ -1,23 +1,37 @@
 Bootstrap: docker
 From: nvidia/cuda:12.1.1-devel-ubuntu22.04
  
-%environment
-    export PATH=/opt/conda/envs/myenv/bin:/opt/conda/bin:$PATH
+%environment # Set up environment for linux
+    export PATH=/usr/bin:$PATH
     export CUDA_VISIBLE_DEVICES=0
-    export PYTHONPATH=/opt/conda/envs/myenv/lib/python3.10/site-packages:$PYTHONPATH
- 
-%post
-    # Update package lists and install essential system dependencies
+
+%files
+    requirements.txt /tmp/full_requirements.txt
+
+# Update package lists and install essential system dependencies
+%post 
     apt-get update && apt-get install -y \
         git \
         python3 \
         python3-pip \
         python3-venv \
-        build-essential
-    pip install --no-cache-dir wheel setuptools;
-    pip install --no-cache-dir packaging;
-    pip install --no-cache-dir torch==2.3.1;
- 
+        build-essential \
+        libgl1-mesa-glx \
+        ffmpeg
+
+    python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
+    
+    python3 -m pip install --no-cache-dir \
+        torch==2.1.2 \
+        torchvision==0.16.2 \
+        torchmetrics==1.7.1 \
+        --index-url https://download.pytorch.org/whl/cu121
+        
+    python3 -m pip install --no-cache-dir -r /tmp/full_requirements.txt
+    
+    rm /tmp/full_requirements.txt
+
  
 %runscript
     exec bash
+    
